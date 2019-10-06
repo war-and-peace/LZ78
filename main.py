@@ -201,7 +201,7 @@ class LZ78Decompressor:
 
 if __name__ == "__main__":    
     sys.setrecursionlimit(10000)
-    lz78_c = LZ78Compressor("dataset_small", "output")
+    lz78_c = LZ78Compressor("dataset", "output")
     lz78_d = LZ78Decompressor("output")
     lz78_c.compress()
     lz78_d.decompress()
