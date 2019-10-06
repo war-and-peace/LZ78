@@ -29,13 +29,13 @@ class Node:
         return node
 
     def findValue(self, value):
-        if value in self.children:
+        if value in self.children.keys():
             return self.children[value]
         else:
             return None
     
 
-class LZ78:
+class LZ78Compressor:
     def __init__(self, directoryPath, outputDirPath=""):
         self.directoryPath = directoryPath
         self.root = Node(index=0)
@@ -51,7 +51,7 @@ class LZ78:
     def findLastOne(self, node, inputs):
         for i in inputs:
             node = node.findValue(i)
-        return self.mapping[node.getIndex()]
+        return self.mapping[node.getIndex() - 1]
 
     def add_to_tree(self, node, inputs, index):
         if len(inputs) <= index:
@@ -68,17 +68,12 @@ class LZ78:
 
     def addToTree(self, inputs):
         ret = self.add_to_tree(self.root, inputs, 0)
-        # print("ret = ", ret)
         if ret == 1:
             inputs.clear()
             self.next_index = self.next_index + 1
 
     def lz78_compress(self, inputPath, outputPath):
         self.clear()
-        print("mapping: ", self.mapping)
-        print("index", self.next_index)
-        
-
         inputs = []
         with open(inputPath, 'rb') as f:
             while True:
@@ -86,12 +81,11 @@ class LZ78:
                 if not binary_input:
                     break
                 decimal_input = int.from_bytes(binary_input, 'big')
-                # print(binary_input)
                 inputs.append(decimal_input)
                 self.addToTree(inputs)
 
         with open(outputPath, "wb") as f:
-            for index, value in self.mapping:
+            for index, value in self.mapping:                
                 self.writeIndex(f, index)
                 f.write(value.to_bytes(1, 'big'))
             if len(inputs) > 0:
@@ -100,57 +94,53 @@ class LZ78:
                 f.write(value.to_bytes(1, 'big'))
         
     def writeIndex(self, file, index):
-        binary_string = bin(index)[2:]
-        slen = len(binary_string)
-        rbstr = ""
-        if slen < 8:
-            for _ in range(8 - slen - 1):
-                binary_string = "0" + binary_string
-            rbstr = "1" + binary_string
-        else:
-            nbs = ""
-            cnt = 0
-            q = 0
-            used = False
-            while q < slen:
-                cnt += 1
-                if cnt % 8 == 0:
-                    if used:
-                        nbs += '0'
-                    else:
-                        nbs += '1'
-                else:
-                    nbs += binary_string[q]
-                    q += 1
-            rbstr = nbs 
-        blist = int(rbstr, 2).to_bytes(math.ceil(len(rbstr) / 8), 'big')
-        file.write(blist)
+        last = True
+        ans = ""
+        if index == 0:
+            file.write(int(128).to_bytes(1, 'big'))
+            return
+        while index > 0:
+            offset = index % 128
+            index = index // 128
+            if last:
+                last = False
+                ans = (bin(offset + 128)[2:]) + ans
+            else:
+                ans = (bin(offset)[2:]).zfill(8) + ans
+        
+        number = int(ans, 2)
+        bstring = number.to_bytes((len(ans) + 7) // 8, 'big')
+        file.write(bstring)
 
     def compress(self):
-        # self.clear()
-        print(self.directoryPath)
         currentPath = os.getcwd()
         cp = join(currentPath, self.outputDirPath)
         os.mkdir(cp)
         folderNamesList = [f for f in os.listdir(self.directoryPath)]
         for i in folderNamesList:
             os.mkdir(join(cp, i))
-        # print(folderNamesList)
         for d in os.listdir(self.directoryPath):
             directory = join(self.directoryPath, d)
-            print(directory)
             for f in os.listdir(directory):
                 fileLocation = join(cp, d)
                 fileLocation = join(fileLocation, f)
                 inputFileLocation = join(directory, f)
-                # inputFileLocation = join(currentPath, inputFileLocation)
-                print(inputFileLocation)    
                 self.lz78_compress(inputFileLocation, fileLocation)
+    
+class LZ78Decompressor:
+    def __init__(self, directoryPath):
+        self.directoryPath = directoryPath
+        self.root = Node(index=0)
+        self.mapping = []
+        self.next_index = 1
+    
+    def clear(self):
+        self.root = Node(index=0)
+        self.mapping = []
+        self.next_index = 1
+
     def checkLast(self, byte):
-        if(bin(int.from_bytes(byte, 'big'))[2] == '1'):
-            return True
-        else:
-            return False
+        return (int.from_bytes(byte, 'big') > 127)
 
     def byteToInt(self, byte):
         return int.from_bytes(byte, 'big')
@@ -158,11 +148,9 @@ class LZ78:
     def bytesToInt(self, bytes):
         if(len(bytes) == 0):
             print("Something went wrong")
-        # print(bytes)
         stringForm = ""
         for i in bytes:
-            stringForm += ((bin(int.from_bytes(i, "big"))[3:])).zfill(8)
-        # print(stringForm)
+            stringForm += (((bin(int.from_bytes(i, "big"))[2:]).zfill(8))[1:])
         return int(stringForm, 2)
 
     def readOneItem(self, file):
@@ -180,9 +168,6 @@ class LZ78:
     def lz78_decompress(self, input, output):
         self.clear()
         self.mapping.append(None)
-        print(output)
-        # print(len(self.mapping)
-        self.mapping.append(None)
         mlen = 1
         outputFile = open(output, "wb")
         with open(input, "rb") as f:
@@ -190,7 +175,6 @@ class LZ78:
                 index, symbol = self.readOneItem(f)
                 if index is None:
                     break
-                # print(index, symbol)
                 if index >= mlen:
                     raise Exception("Wrong input file. Input file might not be compressed with LZ78")
                 prefix = self.mapping[index]
@@ -206,8 +190,6 @@ class LZ78:
 
     def decompress(self):
         self.clear()
-        # currentPath = os.getcwd()
-        # currentPath = join(currentPath, self.directoryPath)
         for d in os.listdir(self.directoryPath):
             directory = join(self.directoryPath, d)
             for f in os.listdir(directory):
@@ -219,8 +201,8 @@ class LZ78:
 
 if __name__ == "__main__":    
     sys.setrecursionlimit(10000)
-    lz78_c = LZ78("dataset_small", "output")
-    lz78_d = LZ78("output")
+    lz78_c = LZ78Compressor("dataset_small", "output")
+    lz78_d = LZ78Decompressor("output")
     lz78_c.compress()
     lz78_d.decompress()
-
+    
