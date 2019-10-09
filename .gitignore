@@ -1,1 +1,5 @@
 .vscode
+build
+dataset
+dataset_small
+output
