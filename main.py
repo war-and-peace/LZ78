@@ -5,26 +5,16 @@ from os.path import isfile, join, isdir
 # import timeit
 
 class Node:
-    def __init__(self, parent=None, value=None, index=None):
-        self.parent = parent
+    def __init__(self, value=None, index=None):
         self.value = value
         self.index = index
         self.children = {}
 
-    def setValue(self, value):
-        self.value = value
-
-    def setParent(self, parent):
-        self.parent = parent
-
-    def setIndex(self, index):
-        self.index = index
-    
     def getIndex(self):
         return self.index
     
     def addChild(self, value, index=None):
-        node = Node(self, value, index)
+        node = Node(value, index)
         self.children[value] = node
         return node
 
@@ -53,43 +43,31 @@ class LZ78Compressor:
             node = node.findValue(i)
         return self.mapping[node.getIndex() - 1]
 
-    def add_to_tree(self, node, inputs, index):
-        if len(inputs) <= index:
-            return 0
-        childNode = node.findValue(inputs[index])
-        if childNode is not None:
-            return self.add_to_tree(childNode, inputs, index + 1)       
-        else:
-            if index != len(inputs) - 1:
-                raise Exception("Could not find intermediate nodes values")
-            node.addChild(inputs[index], self.next_index)
-            self.mapping.append((node.getIndex(), inputs[index]))
-            return 1
-
-    def addToTree(self, inputs):
-        ret = self.add_to_tree(self.root, inputs, 0)
-        if ret == 1:
-            inputs.clear()
+    def addToTree(self, node, input):
+        childNode = node.findValue(input)
+        if childNode is None:
+            node.addChild(input, self.next_index)
+            self.mapping.append((node.getIndex(), input))
             self.next_index = self.next_index + 1
+            return self.root
+        else:
+            return childNode 
 
     def lz78_compress(self, inputPath, outputPath):
         self.clear()
-        inputs = []
+        next_node = self.root
+        input = []
         with open(inputPath, 'rb') as f:
-            while True:
-                binary_input = f.read(1)
-                if not binary_input:
-                    break
-                decimal_input = int.from_bytes(binary_input, 'big')
-                inputs.append(decimal_input)
-                self.addToTree(inputs)
+            input = list(f.read())
+        for binary_input in input:
+            next_node = self.addToTree(next_node, binary_input)
 
         with open(outputPath, "wb") as f:
             for index, value in self.mapping:                
                 self.writeIndex(f, index)
                 f.write(value.to_bytes(1, 'big'))
-            if len(inputs) > 0:
-                index, value = self.findLastOne(self.root, inputs)
+            if next_node is not self.root:
+                index, value = self.mapping[next_node.getIndex() - 1]
                 self.writeIndex(f, index)
                 f.write(value.to_bytes(1, 'big'))
         
@@ -124,8 +102,10 @@ class LZ78Compressor:
             for f in os.listdir(directory):
                 fileLocation = join(cp, d)
                 fileLocation = join(fileLocation, f)
-                inputFileLocation = join(directory, f)
-                self.lz78_compress(inputFileLocation, fileLocation)
+                name, extension = os.path.splitext(fileLocation)
+                outputFileName = name + "Compressed" + extension
+                print(join(directory, f), end="")
+                self.lz78_compress(join(directory, f), outputFileName)
     
 class LZ78Decompressor:
     def __init__(self, directoryPath):
@@ -195,14 +175,13 @@ class LZ78Decompressor:
             for f in os.listdir(directory):
                 filePath = join(directory, f)
                 name, extension = os.path.splitext(f)
-                outputFileName = name + "Decompressed" + extension
+
+                outputFileName = name[:-10] + "Decompressed" + extension
                 outputPath = join(directory, outputFileName)
                 self.lz78_decompress(filePath, outputPath)
 
 if __name__ == "__main__":    
-    sys.setrecursionlimit(10000)
-    lz78_c = LZ78Compressor("dataset", "output")
+    lz78_c = LZ78Compressor("dataset_small", "output")
     lz78_d = LZ78Decompressor("output")
     lz78_c.compress()
     lz78_d.decompress()
-    
