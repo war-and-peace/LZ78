@@ -103,7 +103,7 @@ class LZ78Compressor:
                 f.write(value.to_bytes(1, 'big'))
         
         compressedFileSize = os.stat(outputPath).st_size
-        return compressedFileSize / originalFileSize
+        return originalFileSize / compressedFileSize
         
     def writeIndex(self, file, index):
         '''Writes an index to the file in a special form that was described in the assignment description'''
@@ -148,6 +148,8 @@ class LZ78Compressor:
         for d in os.listdir(self.directoryPath):
             directory = join(self.directoryPath, d)
             dir_ratio = []
+            dir_max = 0
+            dir_min = 1000
         
             for f in os.listdir(directory):
                 fileLocation = join(cp, d)
@@ -166,15 +168,17 @@ class LZ78Compressor:
                 print(f'Compression finished. Compression ratio is: {ratio}')
                 print(f'Elapsed time: {elapsedTime}\n')
                 dir_ratio.append(ratio)
+                dir_min = min(dir_min, ratio)
+                dir_max = max(dir_max, ratio)
 
-            ratios.append((directory, dir_ratio))
+            ratios.append((directory, (dir_ratio, dir_max, dir_min)))
         overall = 0
         print()
 
-        for dirs, ratio in ratios:
+        for dirs, (ratio, max_ratio, min_ratio) in ratios:
             r = sum(ratio) / len(ratio)
             overall += r
-            print(f'Average ratio of compression of the files in directory {dirs} is {r}')
+            print(f'\nFor directory {dirs}:\n Average ratio: {r}\n Maximum ratio: {max_ratio}\n Minimum ratio: {min_ratio}')
         
         print(f'\nOverall average compression ratio for this dataset: {overall / len(ratios)}')
     
@@ -282,8 +286,13 @@ class LZ78Decompressor:
 
 if __name__ == "__main__":    
     
-    lz78_c = LZ78Compressor("dataset", "output")
-    lz78_d = LZ78Decompressor("output")
+    if len(sys.argv) != 3:
+        raise "Invalid arguments"
+
+    inputPath = sys.argv[1]
+    outputPath = sys.argv[2]
+    lz78_c = LZ78Compressor(inputPath, outputPath)
+    lz78_d = LZ78Decompressor(outputPath)
     
     compressionStartTime = time.time()
     lz78_c.compress()
